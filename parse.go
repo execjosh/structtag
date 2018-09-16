@@ -11,52 +11,56 @@ func Parse(s string) (StructTag, error) {
 	t := FromMap(map[string]string{})
 
 	orig := s
-	tag := normalize(s)
+	s = normalize(s)
 
 	// This code is based on reflect.StructTag.Lookup
 
-	for tag != "" {
+	i := 0
+	for i < len(s) {
 		// Skip leading space.
-		i := 0
-		for i < len(tag) && tag[i] == ' ' {
-			i++
+		j := i
+		for j < len(s) && s[j] == ' ' {
+			j++
 		}
-		tag = tag[i:]
-		if tag == "" {
+		if j >= len(s) {
 			break
 		}
 
 		// Scan to colon.
-		i = 0
-		for i < len(tag) && tag[i] > ' ' && tag[i] != ':' && tag[i] != '"' && tag[i] != 0x7f {
-			i++
+		i = j
+		for j < len(s) && s[j] > ' ' && s[j] != ':' && s[j] != '"' && s[j] != 0x7f {
+			j++
 		}
-		if i == 0 || i+1 >= len(tag) || tag[i] != ':' || tag[i+1] != '"' {
-			return nil, fmt.Errorf("invalid key in pair in struct tag: %s", orig)
+		if j == i || j+1 >= len(s) || s[j] != ':' || s[j+1] != '"' {
+			return nil, fmt.Errorf("invalid key in pair in struct tag: %s:%d-%d", orig, i, j)
 		}
-		key := string(tag[:i])
-		tag = tag[i+1:]
+		key := string(s[i:j])
+		j++ // move past colon
 
 		// Scan quoted string to find value.
-		i = 1
-		for i < len(tag) && tag[i] != '"' {
-			if tag[i] == '\\' {
-				i++
+		i = j
+		j++ // move past beg quote
+		for j < len(s) && s[j] != '"' {
+			if s[j] == '\\' {
+				j++
 			}
-			i++
+			j++
 		}
-		if i >= len(tag) {
-			return nil, fmt.Errorf("invalid value in pair in struct tag: %s, key: %s", orig, key)
+		if j >= len(s) {
+			return nil, fmt.Errorf("invalid value in pair in struct tag: %s:%d-%d, key: %s", orig, i, j, key)
 		}
-		qval := string(tag[:i+1])
-		tag = tag[i+1:]
+		j++ // move to end quote
+		qval := string(s[i:j])
 
 		val, err := strconv.Unquote(qval)
 		if err != nil {
-			return nil, fmt.Errorf("invald value in pair in struct tag: %s, key: %s, val: %s, err: %v", orig, key, qval, err)
+			return nil, fmt.Errorf("invald value in pair in struct tag: %s:%d-%d, key: %s, val: %s, err: %v", orig, i, j, key, qval, err)
 		}
 
 		t.Set(key, val)
+
+		j++ // move past end quote
+		i = j
 	}
 
 	return t, nil
